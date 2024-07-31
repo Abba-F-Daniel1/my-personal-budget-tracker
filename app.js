@@ -11,11 +11,16 @@ const currencySelect = document.getElementById('currency-select');
 const confirmModal = document.getElementById('confirm-modal');
 const confirmDeleteBtn = document.getElementById('confirm-delete');
 const cancelDeleteBtn = document.getElementById('cancel-delete');
+const submitButton = document.querySelector('#transaction-form .btn');
+
+const ADD_TRANSACTION_TEXT = 'Add Transaction';
+const EDIT_TRANSACTION_TEXT = 'Edit Transaction';
 
 let transactions = JSON.parse(localStorage.getItem('transactions')) || {};
 let currentCurrency = localStorage.getItem('currentCurrency') || 'USD';
 let exchangeRates = {};
 let deleteIndex;
+let editIndex = null;
 
 // Fetch exchange rates from a free API (e.g., ExchangeRate-API)
 async function fetchExchangeRates() {
@@ -93,7 +98,7 @@ function updateTransactionList() {
     li.innerHTML = `
             <span>${transaction.description}</span>
             <span>${formatCurrency(transaction.amount, currentCurrency)}</span>
-            <button class="edit-btn" onclick="editTransaction(${index})">
+            <button class="edit-btn" onclick="enterEditMode(${index})">
                 <i class="fas fa-edit"></i>
             </button>
             <button class="delete-btn" onclick="showConfirmDialog(${index})">
@@ -104,8 +109,8 @@ function updateTransactionList() {
   });
 }
 
-// Add transaction
-function addTransaction(e) {
+// Handle form submission
+function handleFormSubmit(e) {
   e.preventDefault();
 
   const description = descriptionInput.value.trim();
@@ -117,6 +122,15 @@ function addTransaction(e) {
     return;
   }
 
+  if (editIndex !== null) {
+    updateTransaction(description, amount, type);
+  } else {
+    addTransaction(description, amount, type);
+  }
+}
+
+// Add transaction
+function addTransaction(description, amount, type) {
   const transaction = { id: generateId(), description, amount, type };
 
   if (!transactions[currentCurrency]) transactions[currentCurrency] = [];
@@ -125,37 +139,43 @@ function addTransaction(e) {
   updateUI();
 
   showToast('Transaction added successfully!', 'success');
-
-  descriptionInput.value = '';
-  amountInput.value = '';
+  resetForm();
 }
 
-// Edit transaction
-function editTransaction(index) {
+// Update transaction
+function updateTransaction(description, amount, type) {
+  transactions[currentCurrency][editIndex] = { id: generateId(), description, amount, type };
+
+  updateLocalStorage();
+  updateUI();
+
+  showToast('Transaction updated successfully!', 'success');
+  resetForm();
+  exitEditMode();
+}
+
+// Enter edit mode
+function enterEditMode(index) {
   const transaction = transactions[currentCurrency][index];
   descriptionInput.value = transaction.description;
   amountInput.value = transaction.amount;
   typeInput.value = transaction.type;
 
-  form.removeEventListener('submit', addTransaction);
-  form.addEventListener('submit', function updateTransaction(e) {
-    e.preventDefault();
+  editIndex = index;
+  submitButton.textContent = EDIT_TRANSACTION_TEXT;
+}
 
-    transaction.description = descriptionInput.value;
-    transaction.amount = +amountInput.value;
-    transaction.type = typeInput.value;
+// Exit edit mode
+function exitEditMode() {
+  editIndex = null;
+  submitButton.textContent = ADD_TRANSACTION_TEXT;
+}
 
-    updateLocalStorage();
-    updateUI();
-
-    form.removeEventListener('submit', updateTransaction);
-    form.addEventListener('submit', addTransaction);
-
-    descriptionInput.value = '';
-    amountInput.value = '';
-
-    showToast('Transaction updated successfully!', 'success'); // Success message
-  });
+// Reset form
+function resetForm() {
+  descriptionInput.value = '';
+  amountInput.value = '';
+  typeInput.value = '';
 }
 
 // Delete transaction
@@ -164,7 +184,7 @@ function deleteTransaction() {
   transactions[currentCurrency].splice(deleteIndex, 1);
   updateLocalStorage();
   updateUI();
-  showToast('Transaction deleted successfully!', 'success'); // Success message
+  showToast('Transaction deleted successfully!', 'success');
 }
 
 // Function to show the confirmation dialog
@@ -214,30 +234,25 @@ function removeToast(button) {
   setTimeout(() => toast.remove(), 300);
 }
 
-// Generate a unique ID for each transaction
-function generateId() {
-  return '_' + Math.random().toString(36).substr(2, 9);
-}
-
-// Update local storage
-function updateLocalStorage() {
-  localStorage.setItem('transactions', JSON.stringify(transactions));
-  localStorage.setItem('currentCurrency', currentCurrency);
-}
-
-// Event listeners
-form.addEventListener('submit', addTransaction);
+// Initialize
 currencySelect.addEventListener('change', (e) => {
   currentCurrency = e.target.value;
   localStorage.setItem('currentCurrency', currentCurrency);
   updateUI();
 });
 
-// Initialize app
-async function initApp() {
-  await fetchExchangeRates();
-  currencySelect.value = currentCurrency;
+fetchExchangeRates().then(() => {
   updateUI();
+});
+
+form.addEventListener('submit', handleFormSubmit);
+
+// Generate unique ID
+function generateId() {
+  return '_' + Math.random().toString(36).substr(2, 9);
 }
 
-initApp();
+// Save to localStorage
+function updateLocalStorage() {
+  localStorage.setItem('transactions', JSON.stringify(transactions));
+}
